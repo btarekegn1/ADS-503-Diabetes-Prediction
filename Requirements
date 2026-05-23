@@ -1,0 +1,64 @@
+# Project Requirements
+1. Video presentation
+2. Technical report
+3. Executive summary PowerPoint 
+
+## 1. Video presentation
+Give a 10-15 minute presentation based on your technical report.
+Include a technical explanation of the following:
+- The clearly defined problem statement and data description 
+- Exploratory Data Analysis (EDA)
+- Data pre-processing
+- Data splitting
+- Model building strategies
+- Model performance and hyperparameter tuning
+- Results and final model selection
+- Optional: Demonstration of R Shiny web application of the project
+- Discussion and conclusion (particularly present: how did you frame the problem as a predictive modeling solution?)
+- Your audience for this video is your data science peers/technical audience with the knowledge of data science methods and techniques.
+
+Format
+- Video Presentation: Submit a video mp4 or viable link to the video of your team's recorded presentation of your project.
+- The video should demonstrate narrated slides (needed for business audience).
+- Select a screencasting tool, such as Zoom, to record your screen and provide a voice narration.
+- Ensure that the sound quality of your video is good and each member presents an equal portion of the presentation. Export the video file to an mp4 format. 
+- You may use any recording software you wish. 
+- View the Recording Video Presentation and Submission Guidelines for MS-ADS Students guide for additional recording instructions.
+
+## 2. Technical Report
+Include a clearly defined problem statement.
+Describe your analysis of the data.
+Include a detailed solution.
+You can include graphs and output tables only if you use them in your discussion.
+This section is intended for a statistically literate/technical audience and must be written in a clear, organized fashion.
+You can use the case studies from Chapters 10 and 17 on how to build your predictive modeling analysis.
+You can organize the report into subsections such as:
+- Problem statement and justification for the proposed approach
+- EDA (graphical and non-graphical representations of relationships between the response variable and predictor variables)
+- Data wrangling and pre-processing (handling of missing values, outliers, correlated features, etc.)
+- Data splitting (training, validation, and test sets)
+- Model strategies (describing main research questions and appropriate analytics methods)
+- Validation and testing (model tuning and evaluation)
+- Results and final model selection (performance measures, etc.)
+- Discussion and conclusions (address the problem statement and suggestions/solutions could go beyond the scope of the course)
+- Appendix (reproducible and clean R code)
+
+Format
+- Technical Report: Submit a single PDF document that combines the (1) Technical Report and (2) Appendix.
+- Implement the project in R language, using R Markdown. Within the R code, import all packages used for the project in the first cell, use code cells for code and comments and use markdown cells for headings and descriptions. Generate a PDF document for submission with code, comments, and results within the notebook. Attach this document as an Appendix to your technical report. 
+- Write your technical report in APA 7 style (here is a Sample Professional Paper). The technical report (without Appendices), including text and selected tables/graphs, should be 10-12 pages. 
+- Combine the technical report paper and appendix documents into a single document. Then, convert that document to a PDF format for submission.
+- Final_Project_Report-Team1.pdf
+
+## 3. Executive summary PowerPoint
+Should be no longer than 5 slides.
+Introduce the problem statement.
+Discuss the solutions that were explored.
+Describe the conclusions of your data analysis to a non-technical audience.
+Should be intelligible to a person who does not know predictive modeling techniques.
+- Suppose you are submitting a report to a Director/VP/Executive-level audience who are not familiar with statistical terminology and predictive modeling methods. This can be seen as the executive summary/introduction of your report.
+- You will want to present your analysis like a story instead of a technical report. You should articulate your final model results for everyone to understand.
+
+Format
+- Submit your Executive Summary slides in PPT or PDF format.
+- Executive_Summary-Team1.pptx
