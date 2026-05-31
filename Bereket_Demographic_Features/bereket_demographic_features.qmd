@@ -1,0 +1,378 @@
+---
+title: "ADS 503 Final Project: Demographic Feature Analysis"
+author: "Bereket Tarekegn"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+This section of the group project focuses on demographic and socioeconomic features from the CDC Diabetes Health Indicators dataset. The main goal is to determine whether demographic characteristics and healthcare access variables can help predict diabetes status. This work supports the larger group project, where each team member analyzes a different feature group using the same dataset and then combines the results in the final report.
+
+# Business Question
+
+Can demographic and socioeconomic indicators predict whether a person has no diabetes, prediabetes, or diabetes?
+
+This is a classification problem because the outcome variable, `Diabetes_012`, has three categories: no diabetes, prediabetes, and diabetes. For this section, the predictors include age, sex, education, income, healthcare access, and whether medical cost prevented the person from seeing a doctor.
+
+# Load Packages
+
+```{r setup}
+# Install these packages first if they are not already installed:
+# install.packages(c("tidyverse", "caret", "knitr", "nnet", "rpart", "pROC"))
+
+library(tidyverse)
+library(caret)
+library(knitr)
+library(nnet)
+library(rpart)
+library(pROC)
+
+set.seed(503)
+```
+
+# Load the Dataset
+
+```{r load-data}
+diabetes <- read.csv("C:/Users/bezaa/OneDrive/Desktop/USD/ADS 503 Applied predictive modeling/Project/diabetes_012_health_indicators_BRFSS2015.csv")
+dim(diabetes)
+str(diabetes)
+```
+
+The dataset contains survey responses from the CDC Behavioral Risk Factor Surveillance System. The target variable is `Diabetes_012`, which identifies whether the respondent has no diabetes, prediabetes, or diabetes.
+
+# Select Demographic Features
+
+```{r select-features}
+demo_data <- diabetes %>%
+  select(
+    Diabetes_012,
+    Age,
+    Sex,
+    Education,
+    Income,
+    AnyHealthcare,
+    NoDocbcCost
+  )
+
+str(demo_data)
+summary(demo_data)
+```
+
+For my part of the project, I selected demographic and socioeconomic variables. These variables are important because age, sex, education, income, and healthcare access may influence diabetes risk or the ability to receive preventive care.
+
+# Check Missing Values
+
+```{r missing-values}
+missing_table <- data.frame(
+  Variable = names(demo_data),
+  Missing_Count = colSums(is.na(demo_data)),
+  Missing_Percent = round(colSums(is.na(demo_data)) / nrow(demo_data) * 100, 2)
+)
+
+kable(missing_table, caption = "Missing Values for Demographic Feature Group")
+```
+
+The selected demographic variables do not contain missing values in this dataset. Because there are no missing values, imputation is not required for this feature group.
+
+# Recode Variables
+
+```{r recode-variables}
+demo_data <- demo_data %>%
+  mutate(
+    Diabetes_012 = factor(
+      Diabetes_012,
+      levels = c(0, 1, 2),
+      labels = c("No_Diabetes", "Prediabetes", "Diabetes")
+    ),
+    Sex = factor(
+      Sex,
+      levels = c(0, 1),
+      labels = c("Female", "Male")
+    ),
+    AnyHealthcare = factor(
+      AnyHealthcare,
+      levels = c(0, 1),
+      labels = c("No", "Yes")
+    ),
+    NoDocbcCost = factor(
+      NoDocbcCost,
+      levels = c(0, 1),
+      labels = c("No", "Yes")
+    ),
+    Age = factor(Age),
+    Education = factor(Education),
+    Income = factor(Income)
+  )
+
+str(demo_data)
+summary(demo_data)
+```
+
+The variables were recoded into factor variables because the selected predictors are categorical or ordinal. The target variable was also converted into a factor so it can be used for classification modeling in `caret`.
+
+# Outcome Variable Distribution
+
+```{r outcome-distribution}
+target_table <- demo_data %>%
+  count(Diabetes_012) %>%
+  mutate(Percent = round(n / sum(n) * 100, 2))
+
+kable(target_table, caption = "Distribution of Diabetes Status")
+```
+
+```{r outcome-plot}
+ggplot(demo_data, aes(x = Diabetes_012)) +
+  geom_bar() +
+  labs(
+    title = "Distribution of Diabetes Status",
+    x = "Diabetes Status",
+    y = "Number of Respondents"
+  ) +
+  theme_minimal()
+```
+
+The outcome distribution shows that most respondents are in the no diabetes group. This means the dataset is imbalanced, which is common in healthcare classification problems. Because of this imbalance, accuracy alone may not fully describe model performance, so the confusion matrix should also be reviewed.
+
+# Exploratory Data Analysis
+
+## Diabetes Status by Age Group
+
+```{r age-plot}
+ggplot(demo_data, aes(x = Age, fill = Diabetes_012)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Status by Age Group",
+    x = "Age Group",
+    y = "Proportion",
+    fill = "Diabetes Status"
+  ) +
+  theme_minimal()
+```
+
+The age plot helps show whether diabetes status changes across age groups. In general, diabetes is expected to be more common in older age groups, so age may be an important predictor.
+
+## Diabetes Status by Education Level
+
+```{r education-plot}
+ggplot(demo_data, aes(x = Education, fill = Diabetes_012)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Status by Education Level",
+    x = "Education Level",
+    y = "Proportion",
+    fill = "Diabetes Status"
+  ) +
+  theme_minimal()
+```
+
+Education may be related to diabetes risk because it can be connected to health awareness, access to resources, and preventive care.
+
+## Diabetes Status by Income Level
+
+```{r income-plot}
+ggplot(demo_data, aes(x = Income, fill = Diabetes_012)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Status by Income Level",
+    x = "Income Level",
+    y = "Proportion",
+    fill = "Diabetes Status"
+  ) +
+  theme_minimal()
+```
+
+Income may be related to diabetes status because people with lower income may have less access to healthy food, preventive care, or regular medical visits.
+
+# Train and Test Split
+
+```{r train-test-split}
+set.seed(503)
+
+train_index <- createDataPartition(
+  demo_data$Diabetes_012,
+  p = 0.70,
+  list = FALSE
+)
+
+train_data <- demo_data[train_index, ]
+test_data <- demo_data[-train_index, ]
+
+dim(train_data)
+dim(test_data)
+
+prop.table(table(train_data$Diabetes_012))
+prop.table(table(test_data$Diabetes_012))
+```
+
+The data was split into 70 percent training data and 30 percent testing data. The training data is used to build the models, and the testing data is used to evaluate how well the models perform on new data.
+
+# Model Training Setup
+
+```{r train-control}
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  savePredictions = "final"
+)
+```
+
+Five fold cross validation was used during model training. Cross validation helps estimate how well the models may perform on new data and reduces the risk of relying on one single train and test split.
+
+# Model 1: Multinomial Logistic Regression
+
+```{r multinomial-model}
+set.seed(503)
+
+model_multinom <- train(
+  Diabetes_012 ~ .,
+  data = train_data,
+  method = "multinom",
+  trControl = ctrl,
+  trace = FALSE
+)
+
+model_multinom
+```
+
+Multinomial logistic regression is a good baseline model because the outcome has three classes. This model helps show how well the demographic variables can predict diabetes status using a simpler and more interpretable method.
+
+# Model 2: Decision Tree
+
+```{r decision-tree-model}
+set.seed(503)
+
+model_tree <- train(
+  Diabetes_012 ~ .,
+  data = train_data,
+  method = "rpart",
+  trControl = ctrl,
+  tuneLength = 10
+)
+
+model_tree
+plot(model_tree)
+```
+
+The decision tree model is useful because it can capture non linear relationships and interactions between demographic variables. It is also easier to explain visually than some other machine learning models.
+
+# Model 3: K Nearest Neighbors
+
+```{r knn-model}
+set.seed(503)
+
+model_knn <- train(
+  Diabetes_012 ~ .,
+  data = train_data,
+  method = "knn",
+  trControl = ctrl,
+  preProcess = c("center", "scale"),
+  tuneLength = 10
+)
+
+model_knn
+plot(model_knn)
+```
+
+K nearest neighbors was also tested as a comparison model. Because KNN is distance based, centering and scaling were applied during preprocessing.
+
+# Compare Cross Validation Results
+
+```{r compare-models}
+model_results <- resamples(
+  list(
+    Multinomial_Logistic_Regression = model_multinom,
+    Decision_Tree = model_tree,
+    KNN = model_knn
+  )
+)
+
+summary(model_results)
+
+bwplot(model_results)
+```
+
+The cross validation results compare the models based on accuracy and kappa. Accuracy shows the percentage of correct predictions, while kappa considers correct predictions after accounting for chance agreement.
+
+# Test Set Evaluation
+
+```{r test-predictions}
+pred_multinom <- predict(model_multinom, newdata = test_data)
+pred_tree <- predict(model_tree, newdata = test_data)
+pred_knn <- predict(model_knn, newdata = test_data)
+
+cm_multinom <- confusionMatrix(pred_multinom, test_data$Diabetes_012)
+cm_tree <- confusionMatrix(pred_tree, test_data$Diabetes_012)
+cm_knn <- confusionMatrix(pred_knn, test_data$Diabetes_012)
+
+cm_multinom
+cm_tree
+cm_knn
+```
+
+The confusion matrices show how each model performed on the testing data. This is important because the test data was not used during model training.
+
+# Model Comparison Table
+
+```{r model-comparison-table}
+comparison_table <- data.frame(
+  Model = c("Multinomial Logistic Regression", "Decision Tree", "KNN"),
+  Accuracy = c(
+    cm_multinom$overall["Accuracy"],
+    cm_tree$overall["Accuracy"],
+    cm_knn$overall["Accuracy"]
+  ),
+  Kappa = c(
+    cm_multinom$overall["Kappa"],
+    cm_tree$overall["Kappa"],
+    cm_knn$overall["Kappa"]
+  )
+)
+
+comparison_table <- comparison_table %>%
+  mutate(
+    Accuracy = round(Accuracy, 4),
+    Kappa = round(Kappa, 4)
+  )
+
+kable(comparison_table, caption = "Test Set Model Comparison")
+```
+
+This table summarizes the test set performance for the three models. The best model should be selected by considering both accuracy and kappa, not accuracy alone.
+
+# Variable Importance
+
+```{r variable-importance}
+importance_multinom <- varImp(model_multinom)
+importance_tree <- varImp(model_tree)
+importance_knn <- varImp(model_knn)
+
+plot(importance_multinom, main = "Variable Importance: Multinomial Logistic Regression")
+plot(importance_tree, main = "Variable Importance: Decision Tree")
+plot(importance_knn, main = "Variable Importance: KNN")
+```
+
+Variable importance helps identify which demographic predictors contributed most to the model. This is useful for explaining the results in the final report.
+
+# Results Interpretation
+
+Based on this demographic feature group, the models evaluate whether variables such as age, sex, education, income, healthcare access, and medical cost barriers can predict diabetes status. Age and income are expected to be important because diabetes risk often increases with age, and income may be related to healthcare access, diet, and preventive care. However, demographic features alone may not fully explain diabetes status because diabetes is also strongly related to medical conditions and lifestyle behaviors. Therefore, this section should be combined with the lifestyle and medical condition feature groups to create a stronger final predictive model.
+
+# Conclusion
+
+This section analyzed the demographic and socioeconomic predictors for the ADS 503 diabetes prediction project. The data was cleaned, variables were recoded, exploratory visualizations were created, and three classification models were trained using cross validation. The results from this section will later be combined with the other team members' feature group results to compare which types of predictors are most useful for predicting diabetes risk.
+
+# References
+
+Centers for Disease Control and Prevention. (2015). *Behavioral Risk Factor Surveillance System survey data*. https://www.cdc.gov/brfss/
+
+Kuhn, M., & Johnson, K. (2013). *Applied predictive modeling*. Springer.
+
+Teboul, A. (n.d.). *Diabetes health indicators dataset*. Kaggle. https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset
