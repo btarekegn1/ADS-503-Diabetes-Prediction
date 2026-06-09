@@ -87,7 +87,7 @@ The individual feature group analyses will be merged into a final predictive mod
 * Dataset selected
 * Project topic approved by team
 * Feature groups assigned
-* Demographic feature analysis completed
+* Demographic feature analysis in progress
 * Lifestyle feature analysis in progress
 * GitHub repository established for collaboration
 
