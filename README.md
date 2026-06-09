@@ -1,99 +1,58 @@
-# ADS-503 Diabetes Prediction Project
+# ADS-503 Diabetes Prediction
 
 ## Team Members
-
-* Bereket Tarekegn
-* Luisa Gonzalez
-
-## Course Information
-
-**Course:** ADS-503 Applied Predictive Modeling
-**University:** University of San Diego
-**Instructor:** Professor Daniel McDonald
-
-## Project Title
-
-Predicting Diabetes Risk Using Health Indicators
+- Bereket Tarekegn
+- Luisa Gonzalez
 
 ## Project Overview
-
-The objective of this project is to develop predictive models that identify diabetes risk using health, demographic, lifestyle, and medical condition indicators from the CDC Behavioral Risk Factor Surveillance System (BRFSS) dataset. The project applies concepts learned in ADS-503, including data preprocessing, feature engineering, model training, hyperparameter tuning, cross validation, and model evaluation.
+This project aims to predict diabetes risk using health indicators from the CDC BRFSS 2015 dataset using predictive modeling techniques.
 
 ## Dataset
-
-**Dataset Name:** Diabetes Health Indicators Dataset (BRFSS 2015)
-
-**Source:** Kaggle
-
 https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset
 
-### Dataset Summary
+## Current Project Status
+Project is currently in progress.
 
-* 253,680 observations
-* 22 predictor variables
-* Target variable: Diabetes_012
+## Feature Group Assignments
 
-  * 0 = No Diabetes
-  * 1 = Prediabetes
-  * 2 = Diabetes
+### Bereket Tarekegn – Demographic & Socioeconomic Features
+Variables:
+- Age
+- Sex
+- Education
+- Income
+- AnyHealthcare
+- NoDocbcCost
 
-## Project Structure
+Current Work:
+- Data preprocessing
+- Missing value analysis
+- Exploratory data analysis
+- Feature engineering
+- Model training
+- Model comparison
+- Variable importance analysis
+- Report development
 
-### Bereket Tarekegn
+### Luisa Gonzalez – Lifestyle Features
+Variables:
+- Smoker
+- PhysActivity
+- Fruits
+- Veggies
+- HvyAlcoholConsump
 
-Demographic and socioeconomic feature analysis
+## Planned Predictive Models
+1. Multinomial Logistic Regression
+2. Decision Tree
+3. Random Forest
 
-Features:
+## Evaluation Metrics
+- Accuracy
+- Kappa
+- Confusion Matrix
+- Cross Validation Results
 
-* Age
-* Sex
-* Education
-* Income
-* AnyHealthcare
-* NoDocbcCost
-
-Models:
-
-* Multinomial Logistic Regression
-* Decision Tree
-* Random Forest
-
-### Luisa Gonzalez
-
-Lifestyle feature analysis
-
-Examples:
-
-* Smoking
-* Physical Activity
-* Fruits
-* Vegetables
-* Alcohol Consumption
-
-### Final Project Integration
-
-The individual feature group analyses will be merged into a final predictive modeling report and presentation. Model performance will be compared using cross validation, accuracy, kappa, confusion matrices, and variable importance measures.
-
-## Repository Contents
-
-* README.md
-* Bereket_Demographic_Features
-* Luisa_Lifestyle_Features
-* Final_Report
-* Presentation
-
-## Current Status
-
-* Dataset selected
-* Project topic approved by team
-* Feature groups assigned
-* Demographic feature analysis in progress
-* Lifestyle feature analysis in progress
-* GitHub repository established for collaboration
-
-## Expected Deliverables
-
-* Technical Report (PDF/HTML)
-* Executive Summary
-* Presentation Slides
-* Source Code and Documentation
+## Course
+ADS 503 – Applied Predictive Modeling
+University of San Diego
