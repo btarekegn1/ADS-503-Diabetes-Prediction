@@ -1,0 +1,293 @@
+---
+title: "ADS 503 Final Project: Medical and Clinical Feature Analysis"
+author: "Luisa Gonzalez"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+This section of the group project focuses on medical and clinical health indicators from the CDC Diabetes Health Indicators dataset. The goal is to determine whether medical conditions and self-reported health measures can help predict diabetes status.
+
+# Business Question
+
+Can medical and clinical health indicators predict whether a person has no diabetes, prediabetes, or diabetes?
+---
+
+```{r setup}
+# Load Packages
+library(tidyverse)
+library(caret)
+library(knitr)
+library(nnet)
+library(rpart)
+library(pROC)
+
+set.seed(503)
+
+```
+
+```{r}
+#load dataset 
+diabetes <- read.csv("diabetes_012_health_indicators_BRFSS2015.csv")
+
+dim(diabetes)
+names(diabetes)
+str(diabetes)
+
+```
+
+```{r}
+#Select Medical and Clinical Features
+medical_data <- diabetes %>%
+  select(
+    Diabetes_012,
+    HighBP,
+    HighChol,
+    CholCheck,
+    BMI,
+    Stroke,
+    HeartDiseaseorAttack,
+    GenHlth,
+    MentHlth,
+    PhysHlth,
+    DiffWalk
+  ) %>%
+  mutate(
+    Diabetes_012 = factor(
+      Diabetes_012,
+      levels = c(0, 1, 2),
+      labels = c("No_Diabetes", "Prediabetes", "Diabetes")
+    ),
+    HighBP = factor(HighBP),
+    HighChol = factor(HighChol),
+    CholCheck = factor(CholCheck),
+    Stroke = factor(Stroke),
+    HeartDiseaseorAttack = factor(HeartDiseaseorAttack),
+    DiffWalk = factor(DiffWalk),
+    GenHlth = factor(GenHlth),
+    BMI = as.numeric(BMI),
+    MentHlth = as.numeric(MentHlth),
+    PhysHlth = as.numeric(PhysHlth)
+  )
+
+str(medical_data)
+table(medical_data$Diabetes_012, useNA = "always")
+```
+
+```{r}
+#Target Variable Distribution 
+target_table <- medical_data %>%
+  count(Diabetes_012) %>%
+  mutate(
+    Percent = round(n / sum(n) * 100, 2)
+  )
+
+kable(
+  target_table,
+  caption = "Distribution of Diabetes Status"
+)
+
+ggplot(medical_data,
+       aes(x = Diabetes_012)) +
+  geom_bar() +
+  labs(
+    title = "Distribution of Diabetes Status",
+    x = "Diabetes Status",
+    y = "Number of Respondents"
+  ) +
+  theme_minimal()
+```
+
+#The outcome distribution shows that most respondents are classified as having no diabetes. Prediabetes represents the smallest group, while diabetes cases account for a substantially smaller proportion of observations than the no diabetes category. This class imbalance should be considered when evaluating model performance because accuracy alone may not fully reflect predictive ability.
+
+```{r}
+#EDA
+#BMI plot 
+ggplot(medical_data,
+       aes(x = Diabetes_012,
+           y = BMI,
+           fill = Diabetes_012)) +
+  geom_boxplot() +
+  labs(
+    title = "BMI by Diabetes Status",
+    x = "Diabetes Status",
+    y = "BMI"
+  ) +
+  theme_minimal()
+
+#Diabetes Status by General Health
+ggplot(medical_data,
+       aes(x = GenHlth,
+           fill = Diabetes_012)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Status by General Health",
+    x = "General Health Rating",
+    y = "Proportion",
+    fill = "Diabetes Status"
+  ) +
+  theme_minimal()
+
+# Diabetes Status by High Blood Pressure
+ggplot(medical_data,
+       aes(x = HighBP,
+           fill = Diabetes_012)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Status by High Blood Pressure",
+    x = "High Blood Pressure",
+    y = "Proportion",
+    fill = "Diabetes Status"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+#Train/Test 
+set.seed(503)
+
+train_index <- createDataPartition(
+  medical_data$Diabetes_012,
+  p = 0.70,
+  list = FALSE
+)
+
+train_data <- medical_data[train_index, ]
+test_data <- medical_data[-train_index, ]
+
+dim(train_data)
+dim(test_data)
+
+prop.table(table(train_data$Diabetes_012))
+prop.table(table(test_data$Diabetes_012))
+```
+
+```{r}
+#Model Training Setup
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  savePredictions = "final"
+)
+
+
+```
+
+```{r}
+#Model 1: Multinomial Logistic Regression 
+set.seed(503)
+
+model_multinom <- train(
+  Diabetes_012 ~ .,
+  data = train_data,
+  method = "multinom",
+  trControl = ctrl,
+  trace = FALSE
+)
+
+model_multinom
+```
+
+```{r}
+# Model 2: Decision Tree
+set.seed(503)
+
+model_tree <- train(
+  Diabetes_012 ~ .,
+  data = train_data,
+  method = "rpart",
+  trControl = ctrl,
+  tuneLength = 10
+)
+
+model_tree
+plot(model_tree)
+```
+
+```{r}
+# Model 3: Random Forest Model
+
+set.seed(503)
+
+rf_sample_index <- createDataPartition(
+  train_data$Diabetes_012,
+  p = 0.25,
+  list = FALSE
+)
+
+train_data_rf <- train_data[rf_sample_index, ]
+
+model_rf <- train(
+  Diabetes_012 ~ .,
+  data = train_data_rf,
+  method = "rf",
+  trControl = ctrl,
+  tuneGrid = data.frame(mtry = c(2, 4, 6)),
+  ntree = 100
+)
+
+model_rf
+```
+
+```{r}
+#Evaluate Multinom Model on Test Set 
+pred_multinom <- predict(model_multinom, test_data)
+
+confusionMatrix(
+  pred_multinom,
+  test_data$Diabetes_012
+)
+
+pred_tree <- predict(model_tree, test_data)
+
+confusionMatrix(
+  pred_tree,
+  test_data$Diabetes_012
+)
+
+pred_rf <- predict(model_rf, test_data)
+
+confusionMatrix(
+  pred_rf,
+  test_data$Diabetes_012
+)
+
+
+```
+
+```{r}
+model_results <- data.frame(
+  Model = c(
+    "Multinomial Logistic Regression",
+    "Decision Tree",
+    "Random Forest"
+  ),
+  Accuracy = c(
+    0.8473,
+    0.8474,
+    0.8473
+  ),
+  Kappa = c(
+    0.1776,
+    0.1724,
+    0.1634
+  )
+)
+
+kable(
+  model_results,
+  caption = "Test Set Model Comparison"
+)
+```
+
+```{r}
+varImp(model_multinom)
+```
