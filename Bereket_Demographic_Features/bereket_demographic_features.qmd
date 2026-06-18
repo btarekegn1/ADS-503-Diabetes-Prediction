@@ -1,59 +1,74 @@
 ---
-title: "ADS 503 Final Project: Demographic Feature Analysis"
+title: "Demographic Feature Analysis for Diabetes Risk"
 author: "Bereket Tarekegn"
 format:
   html:
     toc: true
-    toc-depth: 2
-    number-sections: true
+    toc-depth: 3
+    code-fold: false
 execute:
-  echo: true
   warning: false
   message: false
 ---
 
-# Introduction
+# Project Overview
 
-This section of the group project focuses on demographic and socioeconomic features from the CDC Diabetes Health Indicators dataset. The main goal is to determine whether demographic characteristics and healthcare access variables can help predict diabetes status. This work supports the larger group project, where each team member analyzes a different feature group using the same dataset and then combines the results in the final report.
+This section of the ADS 503 final project focuses on demographic and socioeconomic predictors of diabetes risk using the CDC BRFSS 2015 Diabetes Health Indicators dataset.
 
-# Business Question
+The original outcome variable, `Diabetes_012`, has three classes: no diabetes, prediabetes, and diabetes. For this analysis, I converted the outcome into a binary screening target:
 
-Can demographic and socioeconomic indicators predict whether a person has no diabetes, prediabetes, or diabetes?
+- `NoRisk` = no diabetes
+- `AtRisk` = prediabetes or diabetes
 
-This is a classification problem because the outcome variable, `Diabetes_012`, has three categories: no diabetes, prediabetes, and diabetes. For this section, the predictors include age, sex, education, income, healthcare access, and whether medical cost prevented the person from seeing a doctor.
+This approach fits the project goal because the purpose is early screening. The model is not intended to diagnose diabetes. Instead, it is designed to identify people who may need follow-up screening or preventive care.
 
 # Load Packages
 
 ```{r setup}
-# Install these packages first if they are not already installed:
-# install.packages(c("tidyverse", "caret", "knitr", "nnet", "rpart", "pROC"))
+# Install packages first if needed:
+# install.packages(c("tidyverse", "caret", "knitr", "rpart", "randomForest", "pROC"))
 
 library(tidyverse)
 library(caret)
 library(knitr)
-library(nnet)
 library(rpart)
+library(randomForest)
 library(pROC)
 
 set.seed(503)
 ```
 
-# Load the Dataset
+# Load Dataset
 
 ```{r load-data}
-diabetes <- read.csv("C:/Users/bezaa/OneDrive/Desktop/USD/ADS 503 Applied predictive modeling/Project/diabetes_012_health_indicators_BRFSS2015.csv")
+csv_path <- "C:/Project/diabetes_012_health_indicators_BRFSS2015.csv"
+
+if (!file.exists(csv_path)) {
+  csv_path <- "diabetes_012_health_indicators_BRFSS2015.csv"
+}
+
+if (!file.exists(csv_path)) {
+  stop("Dataset not found. Please put diabetes_012_health_indicators_BRFSS2015.csv in C:/Project or in the same folder as this qmd file.")
+}
+
+diabetes <- read.csv(csv_path)
+
 dim(diabetes)
-str(diabetes)
+names(diabetes)
 ```
 
-The dataset contains survey responses from the CDC Behavioral Risk Factor Surveillance System. The target variable is `Diabetes_012`, which identifies whether the respondent has no diabetes, prediabetes, or diabetes.
+The dataset contains 253,680 observations and 22 variables from the CDC BRFSS 2015 survey.
 
-# Select Demographic Features
+# Create Binary Diabetes Risk Target
 
-```{r select-features}
+```{r create-binary-target}
 demo_data <- diabetes %>%
-  select(
-    Diabetes_012,
+  mutate(
+    Diabetes_Risk = ifelse(Diabetes_012 == 0, "NoRisk", "AtRisk"),
+    Diabetes_Risk = factor(Diabetes_Risk, levels = c("AtRisk", "NoRisk"))
+  ) %>%
+  dplyr::select(
+    Diabetes_Risk,
     Age,
     Sex,
     Education,
@@ -66,9 +81,28 @@ str(demo_data)
 summary(demo_data)
 ```
 
-For my part of the project, I selected demographic and socioeconomic variables. These variables are important because age, sex, education, income, and healthcare access may influence diabetes risk or the ability to receive preventive care.
+The target variable is now binary. Prediabetes and diabetes are combined into the `AtRisk` class.
 
-# Check Missing Values
+# Recode Predictors
+
+```{r recode-predictors}
+demo_data <- demo_data %>%
+  mutate(
+    Sex = factor(Sex, levels = c(0, 1), labels = c("Female", "Male")),
+    Age = factor(Age),
+    Education = factor(Education),
+    Income = factor(Income),
+    AnyHealthcare = factor(AnyHealthcare, levels = c(0, 1), labels = c("No", "Yes")),
+    NoDocbcCost = factor(NoDocbcCost, levels = c(0, 1), labels = c("No", "Yes"))
+  )
+
+str(demo_data)
+summary(demo_data)
+```
+
+These variables are treated as categorical features because they represent survey response groups.
+
+# Missing Value Analysis
 
 ```{r missing-values}
 missing_table <- data.frame(
@@ -80,180 +114,207 @@ missing_table <- data.frame(
 kable(missing_table, caption = "Missing Values for Demographic Feature Group")
 ```
 
-The selected demographic variables do not contain missing values in this dataset. Because there are no missing values, imputation is not required for this feature group.
+The selected demographic variables do not contain missing values, so no imputation is needed for this feature group.
 
-# Recode Variables
+# Class Distribution
 
-```{r recode-variables}
-demo_data <- demo_data %>%
-  mutate(
-    Diabetes_012 = factor(
-      Diabetes_012,
-      levels = c(0, 1, 2),
-      labels = c("No_Diabetes", "Prediabetes", "Diabetes")
-    ),
-    Sex = factor(
-      Sex,
-      levels = c(0, 1),
-      labels = c("Female", "Male")
-    ),
-    AnyHealthcare = factor(
-      AnyHealthcare,
-      levels = c(0, 1),
-      labels = c("No", "Yes")
-    ),
-    NoDocbcCost = factor(
-      NoDocbcCost,
-      levels = c(0, 1),
-      labels = c("No", "Yes")
-    ),
-    Age = factor(Age),
-    Education = factor(Education),
-    Income = factor(Income)
-  )
-
-str(demo_data)
-summary(demo_data)
-```
-
-The variables were recoded into factor variables because the selected predictors are categorical or ordinal. The target variable was also converted into a factor so it can be used for classification modeling in `caret`.
-
-# Outcome Variable Distribution
-
-```{r outcome-distribution}
+```{r class-distribution}
 target_table <- demo_data %>%
-  count(Diabetes_012) %>%
+  count(Diabetes_Risk) %>%
   mutate(Percent = round(n / sum(n) * 100, 2))
 
-kable(target_table, caption = "Distribution of Diabetes Status")
+kable(target_table, caption = "Binary Diabetes Risk Class Distribution")
 ```
 
-```{r outcome-plot}
-ggplot(demo_data, aes(x = Diabetes_012)) +
-  geom_bar() +
-  labs(
-    title = "Distribution of Diabetes Status",
-    x = "Diabetes Status",
-    y = "Number of Respondents"
-  ) +
-  theme_minimal()
-```
-
-The outcome distribution shows that most respondents are in the no diabetes group. This means the dataset is imbalanced, which is common in healthcare classification problems. Because of this imbalance, accuracy alone may not fully describe model performance, so the confusion matrix should also be reviewed.
+The class distribution is imbalanced. There are more respondents in the `NoRisk` group than in the `AtRisk` group. Because of this imbalance, accuracy alone is not enough to judge model performance.
 
 # Exploratory Data Analysis
 
-## Diabetes Status by Age Group
+## Diabetes Risk Distribution
 
-```{r age-plot}
-ggplot(demo_data, aes(x = Age, fill = Diabetes_012)) +
+```{r diabetes-risk-plot}
+ggplot(demo_data, aes(x = Diabetes_Risk, fill = Diabetes_Risk)) +
+  geom_bar() +
+  labs(
+    title = "Distribution of Diabetes Risk Status",
+    x = "Diabetes Risk Status",
+    y = "Number of Respondents",
+    fill = "Risk Status"
+  ) +
+  theme_minimal()
+```
+
+## Diabetes Risk by Age
+
+```{r age-risk-plot}
+ggplot(demo_data, aes(x = Age, fill = Diabetes_Risk)) +
   geom_bar(position = "fill") +
   labs(
-    title = "Diabetes Status by Age Group",
+    title = "Diabetes Risk by Age Group",
     x = "Age Group",
     y = "Proportion",
-    fill = "Diabetes Status"
+    fill = "Risk Status"
   ) +
   theme_minimal()
 ```
 
-The age plot helps show whether diabetes status changes across age groups. In general, diabetes is expected to be more common in older age groups, so age may be an important predictor.
+## Diabetes Risk by Sex
 
-## Diabetes Status by Education Level
-
-```{r education-plot}
-ggplot(demo_data, aes(x = Education, fill = Diabetes_012)) +
+```{r sex-risk-plot}
+ggplot(demo_data, aes(x = Sex, fill = Diabetes_Risk)) +
   geom_bar(position = "fill") +
   labs(
-    title = "Diabetes Status by Education Level",
+    title = "Diabetes Risk by Sex",
+    x = "Sex",
+    y = "Proportion",
+    fill = "Risk Status"
+  ) +
+  theme_minimal()
+```
+
+## Diabetes Risk by Education
+
+```{r education-risk-plot}
+ggplot(demo_data, aes(x = Education, fill = Diabetes_Risk)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Risk by Education Level",
     x = "Education Level",
     y = "Proportion",
-    fill = "Diabetes Status"
+    fill = "Risk Status"
   ) +
   theme_minimal()
 ```
 
-Education may be related to diabetes risk because it can be connected to health awareness, access to resources, and preventive care.
+## Diabetes Risk by Income
 
-## Diabetes Status by Income Level
-
-```{r income-plot}
-ggplot(demo_data, aes(x = Income, fill = Diabetes_012)) +
+```{r income-risk-plot}
+ggplot(demo_data, aes(x = Income, fill = Diabetes_Risk)) +
   geom_bar(position = "fill") +
   labs(
-    title = "Diabetes Status by Income Level",
-    x = "Income Level",
+    title = "Diabetes Risk by Income Group",
+    x = "Income Group",
     y = "Proportion",
-    fill = "Diabetes Status"
+    fill = "Risk Status"
   ) +
   theme_minimal()
 ```
 
-Income may be related to diabetes status because people with lower income may have less access to healthy food, preventive care, or regular medical visits.
+## Diabetes Risk by Healthcare Access
+
+```{r healthcare-risk-plot}
+ggplot(demo_data, aes(x = AnyHealthcare, fill = Diabetes_Risk)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Risk by Healthcare Access",
+    x = "Has Healthcare Coverage",
+    y = "Proportion",
+    fill = "Risk Status"
+  ) +
+  theme_minimal()
+```
+
+## Diabetes Risk by Medical Cost Barrier
+
+```{r cost-risk-plot}
+ggplot(demo_data, aes(x = NoDocbcCost, fill = Diabetes_Risk)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Diabetes Risk by Medical Cost Barrier",
+    x = "Could Not See Doctor Because of Cost",
+    y = "Proportion",
+    fill = "Risk Status"
+  ) +
+  theme_minimal()
+```
 
 # Train and Test Split
+
+The dataset has more than 250,000 observations, so a train and test split is appropriate. The split is stratified to preserve the class distribution.
 
 ```{r train-test-split}
 set.seed(503)
 
 train_index <- createDataPartition(
-  demo_data$Diabetes_012,
-  p = 0.70,
+  demo_data$Diabetes_Risk,
+  p = 0.80,
   list = FALSE
 )
 
 train_data <- demo_data[train_index, ]
 test_data <- demo_data[-train_index, ]
 
-dim(train_data)
-dim(test_data)
-
-prop.table(table(train_data$Diabetes_012))
-prop.table(table(test_data$Diabetes_012))
+prop.table(table(train_data$Diabetes_Risk)) * 100
+prop.table(table(test_data$Diabetes_Risk)) * 100
 ```
 
-The data was split into 70 percent training data and 30 percent testing data. The training data is used to build the models, and the testing data is used to evaluate how well the models perform on new data.
+# Balanced Training Sample
 
-# Model Training Setup
+The training data is imbalanced, so a balanced training sample is used to help the models learn both classes. The final evaluation still uses the original test set.
 
-```{r train-control}
+```{r balanced-training-sample}
+set.seed(503)
+
+at_risk_train <- train_data %>%
+  filter(Diabetes_Risk == "AtRisk")
+
+no_risk_train <- train_data %>%
+  filter(Diabetes_Risk == "NoRisk") %>%
+  slice_sample(n = nrow(at_risk_train))
+
+train_balanced <- bind_rows(at_risk_train, no_risk_train) %>%
+  slice_sample(prop = 1)
+
+table(train_balanced$Diabetes_Risk)
+```
+
+# Cross Validation Setup
+
+```{r cross-validation-setup}
+set.seed(503)
+
 ctrl <- trainControl(
-  method = "cv",
+  method = "repeatedcv",
   number = 5,
+  repeats = 2,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
   savePredictions = "final"
 )
 ```
 
-Five fold cross validation was used during model training. Cross validation helps estimate how well the models may perform on new data and reduces the risk of relying on one single train and test split.
+The models are tuned using sensitivity because this project is framed as a health screening problem. For screening, catching true at-risk cases is important.
 
-# Model 1: Multinomial Logistic Regression
+# Model 1: Logistic Regression
 
-```{r multinomial-model}
+```{r logistic-model, cache=TRUE}
 set.seed(503)
 
-model_multinom <- train(
-  Diabetes_012 ~ .,
-  data = train_data,
-  method = "multinom",
+model_logit <- train(
+  Diabetes_Risk ~ .,
+  data = train_balanced,
+  method = "glm",
+  family = "binomial",
   trControl = ctrl,
-  trace = FALSE
+  metric = "Sens"
 )
 
-model_multinom
+model_logit
 ```
 
-Multinomial logistic regression is a good baseline model because the outcome has three classes. This model helps show how well the demographic variables can predict diabetes status using a simpler and more interpretable method.
+Logistic regression is used as a baseline model because it is simple and interpretable.
 
 # Model 2: Decision Tree
 
-```{r decision-tree-model}
+```{r decision-tree-model, cache=TRUE}
 set.seed(503)
 
 model_tree <- train(
-  Diabetes_012 ~ .,
-  data = train_data,
+  Diabetes_Risk ~ .,
+  data = train_balanced,
   method = "rpart",
   trControl = ctrl,
+  metric = "Sens",
   tuneLength = 10
 )
 
@@ -261,118 +322,124 @@ model_tree
 plot(model_tree)
 ```
 
-The decision tree model is useful because it can capture non linear relationships and interactions between demographic variables. It is also easier to explain visually than some other machine learning models.
+The decision tree can capture nonlinear relationships and is easy to explain visually.
 
-# Model 3: K Nearest Neighbors
+# Model 3: Random Forest
 
-```{r knn-model}
+```{r random-forest-model, cache=TRUE}
 set.seed(503)
 
-model_knn <- train(
-  Diabetes_012 ~ .,
-  data = train_data,
-  method = "knn",
+model_rf <- train(
+  Diabetes_Risk ~ .,
+  data = train_balanced,
+  method = "rf",
   trControl = ctrl,
-  preProcess = c("center", "scale"),
-  tuneLength = 10
+  metric = "Sens",
+  tuneGrid = data.frame(mtry = c(2, 3, 4)),
+  ntree = 100
 )
 
-model_knn
-plot(model_knn)
+model_rf
+plot(model_rf)
 ```
 
-K nearest neighbors was also tested as a comparison model. Because KNN is distance based, centering and scaling were applied during preprocessing.
+Random Forest is included because it can capture more complex relationships and provides variable importance results.
 
-# Compare Cross Validation Results
+# Cross Validation Comparison
 
-```{r compare-models}
+```{r cross-validation-comparison}
 model_results <- resamples(
   list(
-    Multinomial_Logistic_Regression = model_multinom,
+    Logistic_Regression = model_logit,
     Decision_Tree = model_tree,
-    KNN = model_knn
+    Random_Forest = model_rf
   )
 )
 
 summary(model_results)
-
-bwplot(model_results)
+dotplot(model_results, metric = "Sens")
+bwplot(model_results, metric = "Sens")
 ```
-
-The cross validation results compare the models based on accuracy and kappa. Accuracy shows the percentage of correct predictions, while kappa considers correct predictions after accounting for chance agreement.
 
 # Test Set Evaluation
 
-```{r test-predictions}
-pred_multinom <- predict(model_multinom, newdata = test_data)
-pred_tree <- predict(model_tree, newdata = test_data)
-pred_knn <- predict(model_knn, newdata = test_data)
-
-cm_multinom <- confusionMatrix(pred_multinom, test_data$Diabetes_012)
-cm_tree <- confusionMatrix(pred_tree, test_data$Diabetes_012)
-cm_knn <- confusionMatrix(pred_knn, test_data$Diabetes_012)
-
-cm_multinom
-cm_tree
-cm_knn
+```{r evaluation-function}
+calculate_metrics <- function(predicted, actual, model_name) {
+  cm <- confusionMatrix(predicted, actual, positive = "AtRisk")
+  
+  accuracy <- as.numeric(cm$overall["Accuracy"])
+  kappa <- as.numeric(cm$overall["Kappa"])
+  sensitivity <- as.numeric(cm$byClass["Sensitivity"])
+  specificity <- as.numeric(cm$byClass["Specificity"])
+  precision <- as.numeric(cm$byClass["Pos Pred Value"])
+  f1 <- as.numeric(cm$byClass["F1"])
+  balanced_accuracy <- mean(c(sensitivity, specificity), na.rm = TRUE)
+  
+  data.frame(
+    Model = model_name,
+    Accuracy = round(accuracy, 4),
+    Kappa = round(kappa, 4),
+    Sensitivity_Recall = round(sensitivity, 4),
+    Specificity = round(specificity, 4),
+    Precision = round(precision, 4),
+    F1 = round(f1, 4),
+    Balanced_Accuracy = round(balanced_accuracy, 4)
+  )
+}
 ```
 
-The confusion matrices show how each model performed on the testing data. This is important because the test data was not used during model training.
+```{r test-predictions}
+pred_logit <- predict(model_logit, newdata = test_data)
+pred_tree <- predict(model_tree, newdata = test_data)
+pred_rf <- predict(model_rf, newdata = test_data)
+
+cm_logit <- confusionMatrix(pred_logit, test_data$Diabetes_Risk, positive = "AtRisk")
+cm_tree <- confusionMatrix(pred_tree, test_data$Diabetes_Risk, positive = "AtRisk")
+cm_rf <- confusionMatrix(pred_rf, test_data$Diabetes_Risk, positive = "AtRisk")
+
+cm_logit
+cm_tree
+cm_rf
+```
 
 # Model Comparison Table
 
 ```{r model-comparison-table}
-comparison_table <- data.frame(
-  Model = c("Multinomial Logistic Regression", "Decision Tree", "KNN"),
-  Accuracy = c(
-    cm_multinom$overall["Accuracy"],
-    cm_tree$overall["Accuracy"],
-    cm_knn$overall["Accuracy"]
-  ),
-  Kappa = c(
-    cm_multinom$overall["Kappa"],
-    cm_tree$overall["Kappa"],
-    cm_knn$overall["Kappa"]
-  )
+comparison_table <- bind_rows(
+  calculate_metrics(pred_logit, test_data$Diabetes_Risk, "Logistic Regression"),
+  calculate_metrics(pred_tree, test_data$Diabetes_Risk, "Decision Tree"),
+  calculate_metrics(pred_rf, test_data$Diabetes_Risk, "Random Forest")
 )
-
-comparison_table <- comparison_table %>%
-  mutate(
-    Accuracy = round(Accuracy, 4),
-    Kappa = round(Kappa, 4)
-  )
 
 kable(comparison_table, caption = "Test Set Model Comparison")
 ```
 
-This table summarizes the test set performance for the three models. The best model should be selected by considering both accuracy and kappa, not accuracy alone.
+This table reports multiple metrics instead of only accuracy. This is important because the dataset is imbalanced.
 
 # Variable Importance
 
 ```{r variable-importance}
-importance_multinom <- varImp(model_multinom)
+importance_logit <- varImp(model_logit)
 importance_tree <- varImp(model_tree)
-importance_knn <- varImp(model_knn)
+importance_rf <- varImp(model_rf)
 
-plot(importance_multinom, main = "Variable Importance: Multinomial Logistic Regression")
+plot(importance_logit, main = "Variable Importance: Logistic Regression")
 plot(importance_tree, main = "Variable Importance: Decision Tree")
-plot(importance_knn, main = "Variable Importance: KNN")
+plot(importance_rf, main = "Variable Importance: Random Forest")
 ```
 
-Variable importance helps identify which demographic predictors contributed most to the model. This is useful for explaining the results in the final report.
+Variable importance helps explain which demographic and socioeconomic variables are most useful for identifying diabetes risk.
 
-# Results Interpretation
+# Discussion
 
-Based on this demographic feature group, the models evaluate whether variables such as age, sex, education, income, healthcare access, and medical cost barriers can predict diabetes status. Age and income are expected to be important because diabetes risk often increases with age, and income may be related to healthcare access, diet, and preventive care. However, demographic features alone may not fully explain diabetes status because diabetes is also strongly related to medical conditions and lifestyle behaviors. Therefore, this section should be combined with the lifestyle and medical condition feature groups to create a stronger final predictive model.
+This analysis used demographic and socioeconomic variables to predict diabetes risk. The target variable was converted from three classes into a binary screening target because the goal is to identify people who may be at risk and may need follow-up care.
+
+The dataset is imbalanced, so accuracy alone is not enough to evaluate model quality. A model could appear accurate by predicting the majority class too often. For that reason, this analysis reports sensitivity, specificity, F1 score, balanced accuracy, and confusion matrices.
+
+Sensitivity is important because this is a screening problem. If the model misses too many at-risk individuals, it would not be useful for early identification. Specificity is also important because too many false positives could create unnecessary follow-up work.
 
 # Conclusion
 
-This section analyzed the demographic and socioeconomic predictors for the ADS 503 diabetes prediction project. The data was cleaned, variables were recoded, exploratory visualizations were created, and three classification models were trained using cross validation. The results from this section will later be combined with the other team members' feature group results to compare which types of predictors are most useful for predicting diabetes risk.
+The demographic feature group provides useful information for early diabetes risk screening. Variables such as age, sex, education, income, healthcare access, and medical cost barriers are practical because they can be collected without laboratory testing.
 
-# References
-
-Centers for Disease Control and Prevention. (2015). *Behavioral Risk Factor Surveillance System survey data*. https://www.cdc.gov/brfss/
-
-Kuhn, M., & Johnson, K. (2013). *Applied predictive modeling*. Springer.
-
-Teboul, A. (n.d.). *Diabetes health indicators dataset*. Kaggle. https://www.kaggle.com/datasets/alexteboul/diabetes-health-indicators-dataset
+The results from this demographic analysis can be combined with the lifestyle feature analysis to support the final group project.
